@@ -6,6 +6,8 @@ services:
       - "27017:27017"
     networks:
       - proxy
+    volumes:
+      - ./localFolder:/data/db
 networks:
   proxy:
     name: proxy
