@@ -13,7 +13,7 @@ import (
 type Claims struct {
 	Username string `json:"user_name"`
 	Id       string `json:"id"`
-	Role     int    `json:"role"`
+	RoleId   string `json:"role"`
 	jwt.StandardClaims
 }
 
@@ -50,12 +50,6 @@ func Authentication(next http.Handler) http.Handler {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		currentUser, err := json.Marshal(claims)
-		if err != nil {
-			w.WriteHeader(http.StatusBadGateway)
-			return
-		}
-		r.Header.Set("current_user", string(currentUser))
 
 		next.ServeHTTP(w, r)
 	})
@@ -109,7 +103,7 @@ func GenerateToken(user *model.User) (string, error) {
 	claims := &Claims{
 		Username: user.UserName,
 		Id:       user.Id.String(),
-		Role:     user.Role,
+		RoleId:   user.RoleId.String(),
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expirationTime.Unix(),
 		},
@@ -132,4 +126,17 @@ func GeneratePassword(pass string) (string, error) {
 func ComparePassword(pass string, hashPassword string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hashPassword), []byte(pass))
 	return err == nil
+}
+
+func GetCurrentUser(tokenStr string) (*Claims, error) {
+	claims := Claims{}
+
+	_, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+		return infrastructure.JwtKey, nil
+	})
+	if err != nil {
+		infrastructure.ErrLog.Println(err)
+	}
+
+	return &claims, err
 }
