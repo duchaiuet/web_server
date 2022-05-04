@@ -10,7 +10,7 @@ type SearchFilter struct {
 }
 
 type CURole struct {
-	Code   int    `json:"code" bson:"code"`
+	Code   string `json:"code" bson:"code"`
 	Name   string `json:"name" bson:"name"`
 	Status bool   `json:"status" bson:"status"`
 }

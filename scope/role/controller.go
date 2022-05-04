@@ -7,6 +7,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"net/http"
 	"strconv"
+	"web_server/infrastructure"
 )
 
 type controller struct {
@@ -47,7 +48,7 @@ func (c controller) CreateRole(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, res)
 }
 
-func (c controller) GetRole(w http.ResponseWriter, r *http.Request) {
+func (c controller) GetRoleById(w http.ResponseWriter, r *http.Request) {
 	var res Response
 	id := chi.URLParam(r, "id")
 	if id == "" {
@@ -179,14 +180,14 @@ func (c controller) DeleteRole(w http.ResponseWriter, r *http.Request) {
 
 type Controller interface {
 	CreateRole(w http.ResponseWriter, r *http.Request)
-	GetRole(w http.ResponseWriter, r *http.Request)
+	GetRoleById(w http.ResponseWriter, r *http.Request)
 	FilterRole(w http.ResponseWriter, r *http.Request)
 	UpdateRole(w http.ResponseWriter, r *http.Request)
 	DeleteRole(w http.ResponseWriter, r *http.Request)
 }
 
-func NewController(client *mongo.Client, collection string, database string) Controller {
+func NewController(client *mongo.Client) Controller {
 	return controller{
-		Service: NewService(client, collection, database),
+		Service: NewService(client, infrastructure.RoleCollection, infrastructure.DatabaseName),
 	}
 }

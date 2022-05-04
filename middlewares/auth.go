@@ -1,88 +1,47 @@
-package middelwares
+package middlewares
 
 import (
 	"encoding/json"
-	"github.com/dgrijalva/jwt-go"
+	"github.com/casbin/casbin/v2"
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"time"
+
+	mongodbadapter "github.com/casbin/mongodb-adapter/v3"
+	"github.com/dgrijalva/jwt-go"
+	mongooptions "go.mongodb.org/mongo-driver/mongo/options"
+
+	"web_server/dto"
 	"web_server/infrastructure"
-	"web_server/model"
 )
 
 type Claims struct {
 	Username string `json:"user_name"`
 	Id       string `json:"id"`
-	RoleId   string `json:"role"`
+	Role     string `json:"role"`
 	jwt.StandardClaims
 }
 
 func Authentication(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie("token")
+		tokenHeader := r.Header.Get("token")
 
-		if err != nil {
-			if err == http.ErrNoCookie {
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		tokenStr := cookie.Value
+		tokenStr := tokenHeader
 		claims := &Claims{}
 
 		token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
 			return infrastructure.JwtKey, nil
 		})
-
 		if err != nil {
 			if err == jwt.ErrSignatureInvalid {
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
+			infrastructure.ErrLog.Println(err)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 		if !token.Valid {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
-}
-
-func Authorization(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie("token")
-		if err != nil {
-			if err == http.ErrNoCookie {
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		tokenStr := cookie.Value
-		claims := &Claims{}
-
-		token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
-			return infrastructure.JwtKey, nil
-		})
-		if err != nil {
-			if err == jwt.ErrSignatureInvalid {
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		if !token.Valid && claims == nil {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -97,13 +56,57 @@ func Authorization(next http.Handler) http.Handler {
 	})
 }
 
-func GenerateToken(user *model.User) (string, error) {
+func Authorization(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		currentUser := Claims{}
+		err := json.Unmarshal([]byte(r.Header.Get("current_user")), &currentUser)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			infrastructure.ErrLog.Println(err)
+			return
+		}
+
+		if currentUser.Role == infrastructure.RoleAdmin {
+			next.ServeHTTP(w, r)
+		}
+
+		mongoClientOption := mongooptions.Client().ApplyURI(infrastructure.DatabaseURI)
+		adapter, err := mongodbadapter.NewAdapterWithClientOption(mongoClientOption, infrastructure.DatabaseName)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			infrastructure.ErrLog.Println(err)
+			return
+		}
+		enforcer, err := casbin.NewEnforcer("./auth_model.conf", adapter)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			infrastructure.ErrLog.Println(err)
+			return
+		}
+
+		ok, err := enforcer.Enforce(currentUser.Role, r.URL.String(), getRule(r.Method))
+		if err != nil {
+			infrastructure.ErrLog.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if !ok {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func GenerateToken(user dto.ResponseUser) (string, error) {
 	expirationTime := time.Now().Add(7 * 24 * time.Hour)
 
 	claims := &Claims{
 		Username: user.UserName,
 		Id:       user.Id.String(),
-		RoleId:   user.RoleId.String(),
+		Role:     user.Role,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expirationTime.Unix(),
 		},
@@ -139,4 +142,19 @@ func GetCurrentUser(tokenStr string) (*Claims, error) {
 	}
 
 	return &claims, err
+}
+
+func getRule(method string) string {
+	switch method {
+	case "GET":
+		return "read"
+	case "POST":
+		return "write"
+	case "PUT":
+		return "write"
+	case "DELETE":
+		return "delete"
+	default:
+		return ""
+	}
 }

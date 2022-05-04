@@ -4,10 +4,16 @@ services:
     image: mongo
     ports:
       - "27017:27017"
-    networks:
-      - proxy
     volumes:
       - ./localFolder:/data/db
+  account_service:
+    build: ./
+    volumes:
+      - ./acount_service
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mongo
 networks:
-  proxy:
-    name: proxy
+  my_network:
+    driver: bridge

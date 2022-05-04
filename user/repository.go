@@ -6,6 +6,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"web_server/dto"
+	"web_server/infrastructure"
 	"web_server/model"
 )
 
@@ -13,7 +15,7 @@ type Repository interface {
 	Create(model.User) (*model.User, error)
 	Get(id primitive.ObjectID) (*model.User, error)
 	GetByUser(userName string) (*model.User, error)
-	Filter(filter SearchFilter) ([]*model.User, error)
+	Filter(filter dto.SearchFilter) ([]*model.User, int, error)
 	Update(model.User) (*model.User, error)
 	Delete(id primitive.ObjectID) error
 }
@@ -55,7 +57,7 @@ func (r repository) Get(id primitive.ObjectID) (*model.User, error) {
 	return user, nil
 }
 
-func (r repository) Filter(filter SearchFilter) ([]*model.User, error) {
+func (r repository) Filter(filter dto.SearchFilter) ([]*model.User, int, error) {
 	var users []*model.User
 	query := bson.M{}
 
@@ -82,20 +84,27 @@ func (r repository) Filter(filter SearchFilter) ([]*model.User, error) {
 
 	cur, err := r.Db.Collection(r.Collection).Find(context.TODO(), query, opts)
 	if err != nil {
-		return users, err
+		return nil, 0, err
 	}
+	total, err := r.Db.Collection(r.Collection).CountDocuments(context.TODO(), query)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	infrastructure.InfoLog.Println("total: ", total)
 
 	for cur.Next(context.TODO()) {
 		var element model.User
 		err := cur.Decode(&element)
 		if err != nil {
-			return []*model.User{}, err
+			infrastructure.ErrLog.Println(err)
+			break
 		}
 
 		users = append(users, &element)
 	}
 
-	return users, nil
+	return users, int(total), nil
 }
 
 func (r repository) Update(user model.User) (*model.User, error) {

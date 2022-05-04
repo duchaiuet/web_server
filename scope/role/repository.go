@@ -12,6 +12,7 @@ import (
 type Repository interface {
 	Create(role model.Role) (*model.Role, error)
 	Get(id primitive.ObjectID) (*model.Role, error)
+	GetByCode(code string) (*model.Role, error)
 	Filter(filter SearchFilter) ([]*model.Role, error)
 	Update(role model.Role) (*model.Role, error)
 	Delete(id primitive.ObjectID) error
@@ -20,6 +21,18 @@ type Repository interface {
 type repository struct {
 	Db         *mongo.Database
 	Collection string
+}
+
+func (r repository) GetByCode(code string) (*model.Role, error) {
+	role := &model.Role{}
+
+	query := bson.D{{"code", code}}
+	err := r.Db.Collection(r.Collection).FindOne(context.TODO(), query).Decode(&role)
+	if err != nil {
+		return nil, err
+	}
+
+	return role, nil
 }
 
 func (r repository) Create(role model.Role) (*model.Role, error) {
@@ -53,8 +66,8 @@ func (r repository) Filter(filter SearchFilter) ([]*model.Role, error) {
 	if filter.Search != "" {
 		query = bson.M{
 			"$or": bson.A{
-				bson.M{"last_name": primitive.Regex{Pattern: ".*\\b" + filter.Search + "\\b.*", Options: "si"}},
-				bson.M{"first_name": primitive.Regex{Pattern: ".*\\b" + filter.Search + "\\b.*", Options: "si"}},
+				bson.M{"name": primitive.Regex{Pattern: ".*\\b" + filter.Search + "\\b.*", Options: "si"}},
+				bson.M{"code": primitive.Regex{Pattern: filter.Search, Options: "si"}},
 			},
 		}
 	}

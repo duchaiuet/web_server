@@ -4,22 +4,25 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"time"
+	"web_server/dto"
 	"web_server/infrastructure"
 	"web_server/model"
+	"web_server/scope/role"
 )
 
 type service struct {
-	Repository Repository
+	UserRepository Repository
+	RoleRepository role.Repository
 }
 
-func (s service) CreateUser(user CreateUser) (*model.User, error) {
-	createUser := ConvertCreteUserToModel(user)
+func (s service) CreateUser(user dto.CreateUser) (*model.User, error) {
+	createUser := dto.ConvertCreteUserToModel(user)
 
 	tNow := time.Now()
 	createUser.CreatedAt = &tNow
 	createUser.Id = primitive.NewObjectID()
 
-	create, err := s.Repository.Create(createUser)
+	create, err := s.UserRepository.Create(createUser)
 	if err != nil {
 		return nil, err
 	}
@@ -29,12 +32,13 @@ func (s service) CreateUser(user CreateUser) (*model.User, error) {
 
 func (s service) GetUserById(id string) (*model.User, error) {
 	objId, err := primitive.ObjectIDFromHex(id)
+
 	if err != nil {
 		infrastructure.ErrLog.Println(err)
 		return nil, err
 	}
 
-	user, err := s.Repository.Get(objId)
+	user, err := s.UserRepository.Get(objId)
 	if err != nil {
 		infrastructure.ErrLog.Println(err)
 		return nil, err
@@ -45,7 +49,7 @@ func (s service) GetUserById(id string) (*model.User, error) {
 
 func (s service) GetUserByUserName(userName string) (*model.User, error) {
 
-	user, err := s.Repository.GetByUser(userName)
+	user, err := s.UserRepository.GetByUser(userName)
 	if err != nil {
 		infrastructure.ErrLog.Println(err)
 		return nil, err
@@ -54,18 +58,18 @@ func (s service) GetUserByUserName(userName string) (*model.User, error) {
 	return user, nil
 }
 
-func (s service) FilterUser(filter SearchFilter) ([]*model.User, error) {
-	users, err := s.Repository.Filter(filter)
+func (s service) FilterUser(filter dto.SearchFilter) ([]*model.User, int, error) {
+	users, total, err := s.UserRepository.Filter(filter)
 	if err != nil {
 		infrastructure.ErrLog.Println(err)
-		return nil, err
+		return nil, 0, err
 	}
 
-	return users, nil
+	return users, total, nil
 }
 
-func (s service) UpdateUser(user UpdateUser, id string) (*model.User, error) {
-	update := ConvertUpdateUserToModel(user)
+func (s service) UpdateUser(user dto.UpdateUser, id string) (*model.User, error) {
+	update := dto.ConvertUpdateUserToModel(user)
 
 	objId, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
@@ -77,7 +81,7 @@ func (s service) UpdateUser(user UpdateUser, id string) (*model.User, error) {
 	update.UpdatedAt = &tNow
 	update.Id = objId
 
-	updateUser, err := s.Repository.Update(update)
+	updateUser, err := s.UserRepository.Update(update)
 	if err != nil {
 		infrastructure.ErrLog.Println(err)
 		return nil, err
@@ -93,7 +97,7 @@ func (s service) DeleteUser(id string) error {
 		return err
 	}
 
-	err = s.Repository.Delete(objId)
+	err = s.UserRepository.Delete(objId)
 	if err != nil {
 		infrastructure.ErrLog.Println(err)
 		return err
@@ -103,16 +107,16 @@ func (s service) DeleteUser(id string) error {
 }
 
 type Service interface {
-	CreateUser(user CreateUser) (*model.User, error)
+	CreateUser(user dto.CreateUser) (*model.User, error)
 	GetUserById(id string) (*model.User, error)
 	GetUserByUserName(userName string) (*model.User, error)
-	FilterUser(filter SearchFilter) ([]*model.User, error)
-	UpdateUser(user UpdateUser, id string) (*model.User, error)
+	FilterUser(filter dto.SearchFilter) ([]*model.User, int, error)
+	UpdateUser(user dto.UpdateUser, id string) (*model.User, error)
 	DeleteUser(id string) error
 }
 
 func NewService(client *mongo.Client, collection string, database string) Service {
 	return service{
-		Repository: NewUserRepository(client, collection, database),
+		UserRepository: NewUserRepository(client, collection, database),
 	}
 }

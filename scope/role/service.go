@@ -12,6 +12,16 @@ type service struct {
 	Repository Repository
 }
 
+func (s service) GetRoleByCode(code string) (*model.Role, error) {
+	role, err := s.Repository.GetByCode(code)
+	if err != nil {
+		infrastructure.ErrLog.Println(err)
+		return nil, err
+	}
+
+	return role, nil
+}
+
 func (s service) CreateRole(role CURole) (*model.Role, error) {
 	cRole := ConvertCURoleToModel(role)
 
@@ -34,13 +44,13 @@ func (s service) GetRoleById(id string) (*model.Role, error) {
 		return nil, err
 	}
 
-	user, err := s.Repository.Get(objId)
+	role, err := s.Repository.Get(objId)
 	if err != nil {
 		infrastructure.ErrLog.Println(err)
 		return nil, err
 	}
 
-	return user, nil
+	return role, nil
 }
 
 func (s service) FilterRole(filter SearchFilter) ([]*model.Role, error) {
@@ -94,6 +104,7 @@ func (s service) DeleteRole(id string) error {
 type Service interface {
 	CreateRole(role CURole) (*model.Role, error)
 	GetRoleById(id string) (*model.Role, error)
+	GetRoleByCode(code string) (*model.Role, error)
 	FilterRole(filter SearchFilter) ([]*model.Role, error)
 	UpdateRole(role CURole, id string) (*model.Role, error)
 	DeleteRole(id string) error

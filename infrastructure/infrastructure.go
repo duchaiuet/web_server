@@ -30,7 +30,12 @@ var (
 var JwtKey = []byte("03111999")
 
 const (
-	UserCollection = "user"
+	UserCollection       = "user"
+	RoleCollection       = "role"
+	APICollection        = "api"
+	CasbinRuleCollection = "casbin_rule"
+
+	RoleAdmin = "001"
 )
 
 var Client *mongo.Client
@@ -78,6 +83,17 @@ func MigrateDatabase(client *mongo.Client) error {
 		context.Background(),
 		mongo.IndexModel{
 			Keys:    bson.D{{Key: "email_address", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	_, err = client.Database(DatabaseName).Collection(RoleCollection).Indexes().CreateOne(
+		context.Background(),
+		mongo.IndexModel{
+			Keys:    bson.D{{Key: "code", Value: 1}},
 			Options: options.Index().SetUnique(true),
 		},
 	)
